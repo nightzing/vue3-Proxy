@@ -1,0 +1,134 @@
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0"
+    />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>proxyVue</title>
+    <style>
+        #app {
+            margin: 100px auto 0 auto;
+            width: 300px;
+        }
+        #btn {
+            margin: 10px auto;
+        }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <input type="text" v-model="num" />
+      <input id="btn" type="button" value="添加到Todolist" v-click="addList" /><br/>
+      <span>您输入的是：</span><span v-bind="num"></span>
+      <ul id="list"></ul>
+    </div>
+  </body>
+
+  <script>
+    class proxyVue {
+      constructor(options) {
+        this.$options = options || {};
+        this.$methods = this._methods = this.$options.methods;
+        const data = (this._data = this.$options.data);
+        this.subscribe = {};
+        this.observe(data);
+        this.compile(options.el);
+      }
+      publish(watcher) {
+        if (!this.subscribe[watcher.property])
+          this.subscribe[watcher.property] = [];
+        this.subscribe[watcher.property].push(watcher);
+      }
+      observe(data) {
+        const that = this;
+        let handler = {
+          get(target, property) {
+            return target[property];
+          },
+          set(target, property, value) {
+            let res = Reflect.set(target, property, value);
+            that.subscribe[property].map(item => {
+              item.update();
+            });
+            return res;
+          }
+        };
+        this.$data = new Proxy(data, handler);
+      }
+      compile(el) {
+        const nodes = Array.prototype.slice.call(
+          document.querySelector(el).children
+        );
+        let data = this.$data;
+        nodes.map(node => {
+          if (node.children.length > 0) this._complie(node);
+          if (node.hasAttribute("v-bind")) {
+            let property = node.getAttribute("v-bind");
+            this.publish(new Watcher(node, "innerHTML", data, property));
+          }
+          if (node.hasAttribute("v-model")) {
+            let property = node.getAttribute("v-model");
+            this.publish(new Watcher(node, "value", data, property));
+            node.addEventListener("input", () => {
+              data[property] = node.value;
+            });
+          }
+          if (node.hasAttribute("v-click")) {
+            let methodName = node.getAttribute("v-click");
+            let mothod = this.$methods[methodName].bind(data);
+            node.addEventListener("click", mothod);
+          }
+        });
+      }
+    }
+    class Watcher {
+      constructor(node, attr, data, property) {
+        this.node = node;
+        this.attr = attr;
+        this.data = data;
+        this.property = property;
+      }
+      update() {
+        this.node[this.attr] = this.data[this.property];
+      }
+    }
+
+    // 渲染todolist列表
+    const Render = {
+      // 初始化
+      init: function(arr) {
+        const fragment = document.createDocumentFragment();
+        for (let i = 0; i < arr.length; i++) {
+          const li = document.createElement("li");
+          li.textContent = arr[i];
+          fragment.appendChild(li);
+        }
+        list.appendChild(fragment);
+      },
+      addList: function(val) {
+        const li = document.createElement("li");
+        li.textContent = val;
+        list.appendChild(li);
+      }
+    };
+
+    // 实例化一个proxyVue
+    window.onload = function() {
+      let vm = new proxyVue({
+        el: "#app",
+        data: {
+          num: 0,
+          arr: []
+        },
+        methods: {
+          addList() {
+            this.arr.push(this.num);
+            Render.addList(this.num);
+          }
+        }
+      });
+    };
+  </script>
+</html>
